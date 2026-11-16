@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" href="/images/brand/kalango-mosaico.png" />
+		<meta
+			name="description"
+			content="Kalango Cafés Especiais — torrefação de microlotes do Cerrado e Sul de Minas. Cafés rastreados, torra sob medida e entrega para todo o Brasil."
+		/>
+		<meta property="og:title" content="Kalango Cafés Especiais" />
+		<meta
+			property="og:description"
+			content="Microlotes rastreados, fermentação controlada e torra sob medida."
+		/>
+		<meta property="og:image" content="/images/products/cafe-kalango-arara-roxa-250g-2.webp" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,700&family=Jost:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Nunito:wght@600;700;800&display=swap"
+			rel="stylesheet"
+		/>
+		<title>Kalango Cafés Especiais — Torrefação de microlotes em Brasília</title>
+		<link rel="canonical" href="https://kalangocafe.com.br/" />
+		<meta name="robots" content="index, follow" />
+		<meta property="og:site_name" content="Kalango Cafés Especiais" />
+		<meta property="og:locale" content="pt_BR" />
+		<meta property="og:type" content="website" />
+		<meta name="twitter:card" content="summary_large_image" />
+
+		<!--
+			Dados estruturados estáticos: ficam no HTML servido, sem depender de JS.
+			É o que os crawlers de IA que não executam JavaScript conseguem ler.
+			O JSON-LD por página (Product, Article) é injetado por src/web/lib/seo.ts.
+		-->
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@graph": [
+					{
+						"@type": "Organization",
+						"@id": "https://kalangocafe.com.br/#organizacao",
+						"name": "Kalango Cafés Especiais",
+						"url": "https://kalangocafe.com.br",
+						"logo": "https://kalangocafe.com.br/images/brand/logo-lockup.png",
+						"description": "Torrefação de cafés especiais em Brasília-DF. Microlotes rastreados do Cerrado Mineiro, Sul de Minas e Campo das Vertentes, com fermentação controlada e curva de torra própria para cada lote.",
+						"email": "kalangocafe@gmail.com",
+						"telephone": "+55 61 99593-7582",
+						"vatID": "49.568.547/0001-87",
+						"sameAs": ["https://www.instagram.com/kalango_cafe/"],
+						"address": {
+							"@type": "PostalAddress",
+							"streetAddress": "SHIN CA3 Lotes 33/34, Loja 7",
+							"addressLocality": "Brasília",
+							"addressRegion": "DF",
+							"postalCode": "71503-503",
+							"addressCountry": "BR"
+						}
+					},
+					{
+						"@type": "CafeOrCoffeeShop",
+						"@id": "https://kalangocafe.com.br/#loja",
+						"name": "Kalango Cafés Especiais",
+						"url": "https://kalangocafe.com.br",
+						"image": "https://kalangocafe.com.br/images/brand/logo-lockup.png",
+						"parentOrganization": { "@id": "https://kalangocafe.com.br/#organizacao" },
+						"servesCuisine": "Café especial",
+						"priceRange": "R$ 50 - R$ 260",
+						"telephone": "+55 61 99593-7582",
+						"email": "kalangocafe@gmail.com",
+						"address": {
+							"@type": "PostalAddress",
+							"streetAddress": "SHIN CA3 Lotes 33/34, Loja 7",
+							"addressLocality": "Brasília",
+							"addressRegion": "DF",
+							"postalCode": "71503-503",
+							"addressCountry": "BR"
+						},
+						"areaServed": { "@type": "Country", "name": "Brasil" }
+					},
+					{
+						"@type": "WebSite",
+						"@id": "https://kalangocafe.com.br/#site",
+						"url": "https://kalangocafe.com.br",
+						"name": "Kalango Cafés Especiais",
+						"inLanguage": "pt-BR",
+						"publisher": { "@id": "https://kalangocafe.com.br/#organizacao" },
+						"potentialAction": {
+							"@type": "SearchAction",
+							"target": {
+								"@type": "EntryPoint",
+								"urlTemplate": "https://kalangocafe.com.br/loja?busca={search_term_string}"
+							},
+							"query-input": "required name=search_term_string"
+						}
+					}
+				]
+			}
+		</script>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/src/web/main.tsx"></script>
+	</body>
+</html>

@@ -1,0 +1,200 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+  Paleta oficial da marca (manual de identidade visual Kalango):
+  Bright Ocean #4688cf · Medium Jungle #009849 · Deep Sky Blues #5ac0ed
+  Yellow Green #9ccb3a · Bright Gold #fcdf03 · Racing Red #ea2027
+  Shadow Grey #212123 · Vanilla Cream #efe9d0
+*/
+@theme inline {
+  --color-ink: #212123;
+  --color-ink-soft: #2b2b2e;
+  --color-ink-line: rgba(239, 233, 208, 0.16);
+  --color-cream: #efe9d0;
+  --color-cream-dim: #ddd6b8;
+  /* Acento principal: Medium Jungle, com um verde mais claro para hover/fundo escuro */
+  --color-jungle: #009849;
+  --color-jungle-lit: #22b862;
+  --color-lime: #9ccb3a;
+  --color-ocean: #4688cf;
+  --color-sky: #5ac0ed;
+  --color-gold: #fcdf03;
+  --color-red: #ea2027;
+  --color-muted: #7d7a6c;
+  /* Cores do mosaico do kalango — agora nos valores oficiais */
+  --color-mosaic-lime: #9ccb3a;
+  --color-mosaic-green: #009849;
+  --color-mosaic-blue: #4688cf;
+  --color-mosaic-yellow: #fcdf03;
+  --color-mosaic-red: #ea2027;
+  /* Bernard Mt → Playfair Display · Maxima Nouva → Jost · Filson Soft → Nunito */
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-sans: "Jost", system-ui, sans-serif;
+  --font-soft: "Nunito", system-ui, sans-serif;
+}
+
+:root {
+  --background: #efe9d0;
+  --foreground: #212123;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-weight: 300;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  ::selection {
+    background: #009849;
+    color: #efe9d0;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    letter-spacing: -0.015em;
+    line-height: 0.92;
+    text-transform: uppercase;
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 0.9;
+  }
+  .label {
+    font-family: var(--font-soft);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  /* Pattern de grãos do manual da marca, usado como textura de seção */
+  .pattern-graos {
+    background-image: url("/images/brand/pattern/graos.webp");
+    background-size: 480px auto;
+    background-repeat: repeat;
+  }
+  .shell {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .shell {
+      padding-inline: 2.5rem;
+    }
+  }
+  @media (min-width: 1280px) {
+    .shell {
+      padding-inline: 4rem;
+    }
+  }
+  .grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.22;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+  .link-underline {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .link-underline:hover {
+    background-size: 100% 1px;
+  }
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee 38s linear infinite;
+  }
+  /* Fita mosaico — ecoa as cores do kalango da logo */
+  .mosaic-rule {
+    height: 3px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      var(--color-mosaic-green) 0 20%,
+      var(--color-mosaic-lime) 20% 40%,
+      var(--color-mosaic-yellow) 40% 60%,
+      var(--color-mosaic-blue) 60% 80%,
+      var(--color-mosaic-red) 80% 100%
+    );
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Painel de fotos do hero no desktop: bordas somem no fundo granulado. */
+@media (min-width: 64rem) {
+  .hero-panel {
+    mask-image: linear-gradient(to right, transparent, #000 38%),
+      linear-gradient(to top, transparent, #000 30%);
+    mask-composite: intersect;
+    -webkit-mask-composite: source-in;
+  }
+}
+
+/* Barrinha de progresso do carrossel do hero. */
+.hero-progress {
+  width: 0;
+  animation: hero-progress linear forwards;
+}
+
+@keyframes hero-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #212123;
+}
+::-webkit-scrollbar-thumb {
+  background: #3c3c40;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #009849;
+}

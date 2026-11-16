@@ -1,0 +1,27 @@
+User-agent: *
+Allow: /
+Disallow: /checkout
+Disallow: /carrinho
+Disallow: /pedido/
+
+# Crawlers de IA — liberados de propósito
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Bingbot
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://kalangocafe.com.br/sitemap.xml

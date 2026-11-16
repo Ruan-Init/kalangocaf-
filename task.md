@@ -1,0 +1,28 @@
+# Reprodução do repositório Kalango
+
+- Origem: https://github.com/Ruan-Init/kalango-6318
+- Commit: efb50d09ca9dffca37ed7e32f75b228c39f39195
+- Pedido: preservar visual, conteúdo e funcionalidades sem adições ou remoções.
+- Plano aprovado: importar código e assets e iniciar catálogo com seed original.
+- Template inicializado em /home/user/kalango; arquivos gerenciados preservados.
+- Código de aplicação e design.md importados; visual original preservado.
+- Credenciais de banco e storage provisionadas preservadas; senha OPS_TOKEN fornecida pelo usuário.
+- Banco novo inicializado antes da troca para credenciais de produção; após a troca nenhum seed/migração foi executado.
+- Produção informada pelo usuário: Turso, Gestão, Bling, Mercado Pago e Resend.
+- Banco de produção verificado somente por leitura: schema compatível, 10 cafés, 4 Lifestyle, 1 receita, 0 pedidos.
+- Mercado Pago: vendedor brasileiro real validado via GET; ambiente production e seller ID configurados. Nenhuma cobrança/preference real criada.
+- Resend: chave aceita, domínio kalangocafe.com.br cadastrado mas not_started. Remetente Gmail substituído por contato@kalangocafe.com.br; reply-to Gmail preservado. DNS externo ainda pendente.
+- Bling: credenciais presentes; banco sem conexão OAuth. Necessário conectar na Gestão após configurar callback.
+- Storage: bucket acessível; CORS permite PUT do navegador e domínio público. Imagens locais presentes.
+- Melhor Envio sem token: fluxo original de contingência preservado; cotações são estimadas.
+- Domínio público ainda serve WordPress/PHP; API do Bun depende da migração/proxy HTTPS.
+- Scripts de execução Bun fora do Runable, env.template, diagnóstico read-only e instruções de migração adicionados.
+- Pequenas correções sem redesenho: labels acessíveis, memoização e normalização de nome de upload; exceções de lint justificadas para widgets ARIA originais.
+- Verificação: 98 testes automatizados passaram (53 pagamento, 13 newsletter, 19 Bling, 13 cafés); banco descartável e APIs simuladas.
+- UI real: login Gestão, imagens de páginas/loja, carrinho e checkout habilitado em produção; desktop/mobile sem erros JavaScript. Nenhuma criação de pedido.
+- Build e lint passaram; lockfile congelado instala sem alterações.
+- Pacote extraído em pasta independente: bun install --frozen-lockfile, lint e build passaram; bun run serve iniciou o servidor de produção.
+- No servidor do pacote extraído: repetido teste de UI de Gestão/imagens/carrinho/checkout/desktop/mobile, sem erros JavaScript.
+- Nenhuma das credenciais privadas apareceu nos bundles frontend (verificado por comparação de conteúdo, sem imprimir segredos).
+- Corrigido NODE_ENV do build para produção sem depender de valor copiado do .env; helper de porta funciona em Linux sem lsof/fuser.
+- Próximos passos: entregar prévia + código privado; DNS Resend e migração do domínio continuam externos.
