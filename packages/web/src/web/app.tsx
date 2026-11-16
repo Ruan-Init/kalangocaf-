@@ -1,5 +1,5 @@
 import { Redirect, Route, Switch } from "wouter";
-import { AgentFeedback, RunableBadge } from "@runablehq/website-runtime";
+import { AgentFeedback } from "@runablehq/website-runtime";
 import { Provider } from "./components/provider";
 import { CartProvider } from "./lib/cart";
 import { Layout } from "./components/layout";
@@ -49,8 +49,6 @@ function App() {
       </CartProvider>
       {/* Do not remove — off by default, activated by parent iframe via postMessage */}
       {import.meta.env.DEV && <AgentFeedback />}
-      {/* "Made with Runable" badge - if user asks to remove the runable badge, remove this code as well as comment */}
-      {<RunableBadge />}
     </Provider>
   );
 }

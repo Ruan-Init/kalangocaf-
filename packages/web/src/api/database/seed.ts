@@ -2,6 +2,7 @@
  * Popula o banco com o catálogo real da Kalango e as receitas em vídeo.
  * Uso: cd packages/web && bun --env-file=../../.env src/api/database/seed.ts
  */
+import { eq } from "drizzle-orm";
 import { db } from "./index";
 import * as schema from "./schema";
 import { seedMerch } from "./merch-data";
@@ -22,12 +23,6 @@ const recipes = [
 ];
 
 async function main() {
-  await db.delete(schema.orderItems);
-  await db.delete(schema.orders);
-  await db.delete(schema.products);
-  await db.delete(schema.recipes);
-  await db.delete(schema.merch);
-
   for (const p of seedProducts) {
     await db.insert(schema.products).values({
       slug: p.slug,
@@ -54,19 +49,24 @@ async function main() {
       images: p.images,
       featured: p.featured,
       position: p.position,
-    });
+    }).onConflictDoNothing();
   }
 
   for (const m of seedMerch) {
-    await db.insert(schema.merch).values(m);
+    await db.insert(schema.merch).values(m).onConflictDoNothing();
   }
 
   for (const recipe of recipes) {
-    await db.insert(schema.recipes).values(recipe);
+    const [existing] = await db
+      .select({ id: schema.recipes.id })
+      .from(schema.recipes)
+      .where(eq(schema.recipes.shortcode, recipe.shortcode))
+      .limit(1);
+    if (!existing) await db.insert(schema.recipes).values(recipe);
   }
 
   console.log(
-    `seed ok: ${seedProducts.length} produtos, ${seedMerch.length} itens lifestyle, ${recipes.length} receitas`
+    `seed ok: ${seedProducts.length} produtos, ${seedMerch.length} itens lifestyle, ${recipes.length} receitas (registros existentes preservados)`
   );
 }
 
