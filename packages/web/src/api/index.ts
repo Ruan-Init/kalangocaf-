@@ -3,6 +3,7 @@ import { createApp } from "./__core/app";
 import { admin } from "./routes/admin";
 import { bling } from "./routes/bling";
 import { catalog } from "./routes/catalog";
+import { club } from "./routes/club";
 import { leads } from "./routes/leads";
 import { newsletter } from "./routes/newsletter";
 import { orders } from "./routes/orders";
@@ -16,6 +17,7 @@ import { newsletterOneClick } from "./services/newsletter-unsubscribe";
 export const router = {
   ping,
   catalog,
+  club,
   recipes,
   orders,
   leads,

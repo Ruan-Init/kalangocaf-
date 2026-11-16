@@ -284,6 +284,168 @@ export async function createPreference(input: PreferenceInput) {
   return { preferenceId: pref.id, checkoutUrl: url };
 }
 
+export type PixPaymentInput = {
+  reference: string;
+  amountCents: number;
+  description: string;
+  payer: {
+    name: string;
+    email: string;
+    document: string;
+    zip: string;
+    street: string;
+    number: string;
+    district: string;
+    city: string;
+    state: string;
+  };
+  idempotencyKey: string;
+};
+
+type PixPaymentResponse = MpPayment & {
+  point_of_interaction?: {
+    transaction_data?: {
+      qr_code?: string;
+      qr_code_base64?: string;
+    };
+  };
+  date_of_expiration?: string;
+};
+
+export async function createPixPayment(input: PixPaymentInput) {
+  await assertSeller();
+  const [firstName, ...lastNames] = input.payer.name.trim().split(/\s+/);
+  const payment = await mpFetch<PixPaymentResponse>("/v1/payments", {
+    method: "POST",
+    body: {
+      transaction_amount: reais(input.amountCents),
+      description: input.description.slice(0, 250),
+      payment_method_id: "pix",
+      external_reference: input.reference,
+      notification_url: webhookUrl(),
+      date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      payer: {
+        email: input.payer.email,
+        first_name: firstName,
+        last_name: lastNames.join(" ") || firstName,
+        identification: { type: "CPF", number: input.payer.document },
+        address: {
+          zip_code: input.payer.zip,
+          street_name: input.payer.street,
+          street_number: input.payer.number,
+          neighborhood: input.payer.district,
+          city: input.payer.city,
+          federal_unit: input.payer.state,
+        },
+      },
+    },
+    idempotencyKey: input.idempotencyKey,
+  });
+  const transactionData = payment.point_of_interaction?.transaction_data;
+  const qrCode = transactionData?.qr_code;
+  const qrCodeBase64 = transactionData?.qr_code_base64;
+  if (!payment.id || !qrCode || !qrCodeBase64 || !payment.date_of_expiration) {
+    throw new MercadoPagoError("Mercado Pago devolveu um Pix sem os dados de pagamento", {
+      retryable: true,
+    });
+  }
+  return {
+    paymentId: String(payment.id),
+    status: payment.status,
+    statusDetail: payment.status_detail ?? null,
+    qrCode,
+    qrCodeBase64,
+    expiresAt: new Date(payment.date_of_expiration),
+  };
+}
+
+export type PreapprovalInput = {
+  reference: string;
+  planName: string;
+  amountCents: number;
+  email: string;
+  idempotencyKey: string;
+};
+
+export type MpPreapproval = {
+  id: string;
+  status: string;
+  live_mode?: boolean;
+  external_reference?: string | number | null;
+  collector_id?: number;
+  payer_email?: string;
+  init_point?: string;
+  auto_recurring?: {
+    frequency?: number;
+    frequency_type?: string;
+    transaction_amount?: number;
+    currency_id?: string;
+  };
+};
+
+export async function createPreapproval(input: PreapprovalInput) {
+  await assertSeller();
+  const back = `${siteUrl()}/clube?retorno=cartao`;
+  const preapproval = await mpFetch<MpPreapproval>("/preapproval", {
+    method: "POST",
+    body: {
+      reason: `Clube Kalango — ${input.planName}`,
+      external_reference: input.reference,
+      payer_email: input.email,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: "months",
+        transaction_amount: reais(input.amountCents),
+        currency_id: "BRL",
+      },
+      back_url: back,
+      notification_url: webhookUrl(),
+      status: "pending",
+    },
+    idempotencyKey: input.idempotencyKey,
+  });
+  if (!preapproval.id || !isAllowedCheckoutUrl(preapproval.init_point)) {
+    throw new MercadoPagoError("Mercado Pago devolveu uma assinatura sem link válido", {
+      retryable: true,
+    });
+  }
+  return {
+    preapprovalId: preapproval.id,
+    checkoutUrl: preapproval.init_point,
+    status: preapproval.status,
+  };
+}
+
+export async function getPreapproval(preapprovalId: string): Promise<MpPreapproval | null> {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(preapprovalId)) return null;
+  try {
+    return await mpFetch<MpPreapproval>(`/preapproval/${encodeURIComponent(preapprovalId)}`);
+  } catch (error) {
+    if (error instanceof MercadoPagoError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export type MpAuthorizedPayment = {
+  id: string;
+  preapproval_id?: string;
+  payment?: { id?: number | string };
+};
+
+export async function getAuthorizedPayment(
+  authorizedPaymentId: string,
+): Promise<MpAuthorizedPayment | null> {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(authorizedPaymentId)) return null;
+  try {
+    return await mpFetch<MpAuthorizedPayment>(
+      `/authorized_payments/${encodeURIComponent(authorizedPaymentId)}`,
+    );
+  } catch (error) {
+    if (error instanceof MercadoPagoError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 // ---------------------------------------------------------------- pagamentos
 
 export type MpPayment = {

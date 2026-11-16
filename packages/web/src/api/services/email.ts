@@ -217,3 +217,84 @@ Código de rastreio: ${input.trackingCode}
 Rastreie em: ${url}`,
   });
 }
+
+export async function sendClubPixEmail(input: {
+  reference: string;
+  customerName: string;
+  email: string;
+  planName: string;
+  amountCents: number;
+  pixCode: string;
+  expiresAt: Date;
+}) {
+  const expiration = input.expiresAt.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  });
+  return send({
+    to: input.email,
+    subject: `Pix do Clube Kalango — ${input.planName}`,
+    html: shell(
+      "Pix do Clube Kalango",
+      `<h1 style="margin:0 0 8px;font:700 30px/1.1 Georgia,serif;color:#12100E;">Seu Pix está pronto</h1>
+       <p style="margin:0 0 20px;color:#6B635A;">Olá, ${esc(input.customerName)}. Para iniciar o plano <strong>${esc(input.planName)}</strong>, pague ${brl(input.amountCents)} até ${esc(expiration)}.</p>
+       <p style="margin:0 0 8px;font-weight:700;">Pix copia e cola</p>
+       <p style="margin:0 0 20px;padding:14px;background:#E9E2D6;word-break:break-all;font:13px/1.5 monospace;">${esc(input.pixCode)}</p>
+       <p style="margin:0;color:#6B635A;">A assinatura será ativada depois que o Mercado Pago confirmar o pagamento. Referência: ${esc(input.reference)}.</p>
+       <p style="margin:20px 0 0;color:#6B635A;">Se o código vencer, entre em contato pelo WhatsApp ${esc(STORE.phoneLabel)} para solicitar outro.</p>`
+    ),
+    text: `Olá, ${input.customerName}.
+
+Seu Pix do Clube Kalango (${input.planName}) está pronto.
+Valor: ${brl(input.amountCents)}
+Pague até: ${expiration}
+
+Pix copia e cola:
+${input.pixCode}
+
+A assinatura será ativada após a confirmação do Mercado Pago.
+Referência: ${input.reference}
+Se o código vencer, fale com a gente pelo WhatsApp ${STORE.phoneLabel}.`,
+  }, `club-pix/${input.reference}`);
+}
+
+export async function sendClubPaymentOperationsNotice(input: {
+  reference: string;
+  paymentId: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  planName: string;
+  amountCents: number;
+  paymentMethod: "pix" | "card";
+  address: {
+    street: string;
+    number: string;
+    complement: string | null;
+    district: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+}) {
+  const address = `${input.address.street}, ${input.address.number}${input.address.complement ? `, ${input.address.complement}` : ""} — ${input.address.district}, ${input.address.city}/${input.address.state} · CEP ${input.address.zip}`;
+  return send({
+    to: STORE.notificationEmail,
+    replyTo: input.email,
+    subject: `Clube ativo — ${input.planName} — ${input.customerName}`,
+    html: shell(
+      "Nova assinatura ativa",
+      `<h1 style="margin:0 0 8px;font:700 26px/1.15 Georgia,serif;color:#12100E;">Assinatura confirmada</h1>
+       <p style="margin:0 0 20px;color:#6B635A;">${esc(input.customerName)} · ${esc(input.email)} · ${esc(input.phone)}</p>
+       <p style="margin:0 0 20px;">Plano ${esc(input.planName)} · ${brl(input.amountCents)} por mês · ${input.paymentMethod === "card" ? "cartão com renovação automática" : "Pix com renovação manual"}.</p>
+       <p style="margin:0;color:#6B635A;">Entrega: ${esc(address)}<br>Referência: ${esc(input.reference)}</p>`
+    ),
+    text: `Assinatura confirmada
+${input.customerName} · ${input.email} · ${input.phone}
+Plano ${input.planName} · ${brl(input.amountCents)} por mês
+Forma de pagamento: ${input.paymentMethod === "card" ? "cartão com renovação automática" : "Pix com renovação manual"}
+Entrega: ${address}
+Referência: ${input.reference}`,
+  }, `club-paid/${input.reference}/${input.paymentId}/internal`);
+}

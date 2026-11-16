@@ -21,6 +21,7 @@
     "typecheck": "turbo typecheck",
     "db:generate": "turbo db:generate",
     "db:migrate": "turbo db:migrate",
+    "db:migrate:club": "cd packages/web && bun --env-file=../../.env src/api/database/migrate-club-subscriptions.ts",
     "db:push": "turbo db:push",
     "internal:kill-port": "bun run tooling/kill-port.ts"
   },

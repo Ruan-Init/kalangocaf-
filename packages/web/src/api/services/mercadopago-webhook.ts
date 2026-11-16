@@ -14,9 +14,16 @@
 import type { Context } from "hono";
 import { db } from "../database";
 import * as schema from "../database/schema";
-import { assertSeller, getPayment, MercadoPagoError } from "./mercadopago";
+import {
+  assertSeller,
+  getAuthorizedPayment,
+  getPayment,
+  getPreapproval,
+  MercadoPagoError,
+} from "./mercadopago";
 import { verifyWebhookSignature } from "./mercadopago-signature";
 import { applyPayment } from "./order-payments";
+import { applyClubPayment, applyClubPreapproval } from "./club-payments";
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -111,20 +118,78 @@ export async function mercadoPagoWebhook(c: Context) {
     liveMode: body.live_mode ?? null,
   };
 
-  if (topic !== "payment") {
+  if (
+    topic !== "payment" &&
+    topic !== "subscription_preapproval" &&
+    topic !== "subscription_authorized_payment"
+  ) {
     await record({ ...base, outcome: "ignored_topic" });
     return c.json({ received: true, ignored: "topic" }, 200);
   }
 
   try {
     const seller = await assertSeller();
+    if (topic === "subscription_preapproval") {
+      const preapproval = await getPreapproval(dataId);
+      if (!preapproval) {
+        await record({ ...base, outcome: "ignored_preapproval_not_found" });
+        return c.json({ received: true, ignored: "preapproval_not_found" }, 200);
+      }
+      const result = await applyClubPreapproval(preapproval, seller.id);
+      await record({ ...base, outcome: result.outcome, orderReference: result.reference });
+      return c.json({ received: true, outcome: result.outcome }, 200);
+    }
+
+    if (topic === "subscription_authorized_payment") {
+      const authorized = await getAuthorizedPayment(dataId);
+      if (!authorized?.preapproval_id || !authorized.payment?.id) {
+        await record({ ...base, outcome: "ignored_authorized_payment_incomplete" });
+        return c.json({ received: true, ignored: "authorized_payment_incomplete" }, 200);
+      }
+      const preapproval = await getPreapproval(authorized.preapproval_id);
+      if (!preapproval) {
+        await record({ ...base, outcome: "ignored_preapproval_not_found" });
+        return c.json({ received: true, ignored: "preapproval_not_found" }, 200);
+      }
+      const subscriptionResult = await applyClubPreapproval(preapproval, seller.id);
+      if (subscriptionResult.outcome !== "processed") {
+        await record({
+          ...base,
+          outcome: subscriptionResult.outcome,
+          orderReference: subscriptionResult.reference,
+        });
+        return c.json({ received: true, outcome: subscriptionResult.outcome }, 200);
+      }
+      const payment = await getPayment(String(authorized.payment.id));
+      if (!payment) {
+        await record({ ...base, outcome: "ignored_payment_not_found" });
+        return c.json({ received: true, ignored: "payment_not_found" }, 200);
+      }
+      if (
+        payment.external_reference &&
+        String(payment.external_reference) !== String(preapproval.external_reference)
+      ) {
+        await record({ ...base, outcome: "ignored_mismatch_reference" });
+        return c.json({ received: true, outcome: "ignored_mismatch_reference" }, 200);
+      }
+      const result = await applyClubPayment({
+        ...payment,
+        external_reference: payment.external_reference ?? String(preapproval.external_reference ?? ""),
+      }, seller.id);
+      await record({ ...base, outcome: result.outcome, orderReference: result.reference });
+      return c.json({ received: true, outcome: result.outcome }, 200);
+    }
+
     const payment = await getPayment(dataId);
     if (!payment) {
       // Típico do "Simular notificação": ID que não existe. Autenticado, mas nada a fazer.
       await record({ ...base, outcome: "ignored_payment_not_found" });
       return c.json({ received: true, ignored: "payment_not_found" }, 200);
     }
-    const result = await applyPayment(payment, seller.id);
+    const orderResult = await applyPayment(payment, seller.id);
+    const result = orderResult.outcome === "ignored_unknown_order"
+      ? await applyClubPayment(payment, seller.id)
+      : orderResult;
     await record({ ...base, outcome: result.outcome, orderReference: result.reference });
     return c.json({ received: true, outcome: result.outcome }, 200);
   } catch (err) {

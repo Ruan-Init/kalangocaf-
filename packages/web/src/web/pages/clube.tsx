@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { Field, Reveal, SectionLabel, Spinner } from "../components/primitives";
-import { useCreateLead } from "../queries/leads";
-import { brl } from "../lib/format";
+import { useCreateClubSubscription, useCreateLead } from "../queries/leads";
+import { brl, maskCep, maskCpf, maskPhone, onlyDigits } from "../lib/format";
 import { cn } from "../lib/utils";
 import { MOSAIC_TONES } from "../lib/mosaic";
 import { breadcrumb, SITE_URL, useSeo } from "../lib/seo";
+import { idempotencyKeyFor, isMercadoPagoUrl } from "../lib/order-access";
+import { usePaymentConfig } from "../queries/orders";
 
 /** Escada de planos pintada com o mosaico da logo: verde → amarelo → vermelho. */
 const TONE_DESCOBERTA = MOSAIC_TONES[0];
@@ -55,9 +57,33 @@ const PLANOS = [
 
 export default function Clube() {
   const lead = useCreateLead();
+  const subscription = useCreateClubSubscription();
+  const payment = usePaymentConfig();
   const [plano, setPlano] = useState("duo");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", message: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    document: "",
+    zip: "",
+    street: "",
+    number: "",
+    complement: "",
+    district: "",
+    city: "",
+    state: "",
+    company: "",
+    message: "",
+  });
   const [kind, setKind] = useState<"clube" | "atacado">("clube");
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
+  const [authorizeCard, setAuthorizeCard] = useState(false);
+  const [newsletterOptIn, setNewsletterOptIn] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const paymentOff = payment.isError || payment.data?.env === "disabled";
+  const returnedFromCard = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("retorno") === "cartao";
 
   useSeo({
     title: "Clube de assinatura & atacado",
@@ -85,18 +111,55 @@ export default function Clube() {
     ],
   });
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: keyof typeof form, mask?: (v: string) => string) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = mask ? mask(e.target.value) : e.target.value;
+      setForm((f) => ({ ...f, [k]: value }));
+    };
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (kind === "clube") {
+      setSubmitError(null);
+      const payload = {
+        plan: plano as "descoberta" | "duo" | "obsessao",
+        name: form.name,
+        email: form.email,
+        paymentMethod,
+        cardConsent: paymentMethod === "card" && authorizeCard,
+        newsletterOptIn,
+        phone: onlyDigits(form.phone),
+        document: onlyDigits(form.document),
+        zip: onlyDigits(form.zip),
+        street: form.street,
+        number: form.number,
+        complement: form.complement || undefined,
+        district: form.district,
+        city: form.city,
+        state: form.state.toUpperCase(),
+      };
+      try {
+        const result = await subscription.mutateAsync({
+          ...payload,
+          idempotencyKey: idempotencyKeyFor(payload),
+        });
+        if (result.paymentMethod === "card") {
+          if (!isMercadoPagoUrl(result.checkoutUrl)) {
+            throw new Error("O Mercado Pago devolveu um link de cartão inválido.");
+          }
+          window.location.assign(result.checkoutUrl);
+        }
+      } catch (error) {
+        setSubmitError(error instanceof Error ? error.message : "Não conseguimos iniciar a assinatura.");
+      }
+      return;
+    }
     lead.mutate({
       kind,
       name: form.name,
       email: form.email,
       phone: form.phone || undefined,
       company: form.company || undefined,
-      plan: kind === "clube" ? plano : undefined,
       message: form.message || undefined,
     });
   }
@@ -127,6 +190,10 @@ export default function Clube() {
                 onClick={() => {
                   setKind("clube");
                   setPlano(p.id);
+                  setAuthorizeCard(false);
+                  setSubmitError(null);
+                  subscription.reset();
+                  setCopied(false);
                 }}
                 className={cn(
                   "flex h-full w-full flex-col border p-8 text-left transition-colors",
@@ -184,11 +251,13 @@ export default function Clube() {
               {kind === "clube" ? "Assinar o clube" : "Atacado & cafeterias"}
             </SectionLabel>
             <h2 className="display mt-6 text-6xl leading-[0.85] md:text-7xl">
-              {kind === "clube" ? "Entre pra lista" : "Café pro seu balcão"}
+              {kind === "clube" ? "Assine seu plano" : "Café pro seu balcão"}
             </h2>
             <p className="mt-6 max-w-md text-cream/60">
               {kind === "clube"
-                ? "O clube abre em lotes limitados a cada temporada. Deixe seus dados e a gente te chama assim que abrir a próxima leva."
+                ? paymentMethod === "pix"
+                  ? "Escolha seu plano e receba o Pix da primeira mensalidade por e-mail. A assinatura começa após a confirmação do pagamento."
+                  : "Cadastre o cartão com segurança no Mercado Pago e autorize as cobranças mensais. A assinatura fica ativa após a confirmação do primeiro pagamento."
                 : "Cafeterias, restaurantes e escritórios: torra dedicada, tabela de atacado, treinamento de extração e entrega programada."}
             </p>
 
@@ -211,7 +280,57 @@ export default function Clube() {
             </div>
           </div>
 
-          {lead.isSuccess
+          {kind === "clube" && subscription.data
+                && subscription.data.paymentMethod === "pix"
+            ? (
+              <div className="flex flex-col items-start justify-center gap-5 border border-ink-line p-8 md:p-10">
+                <p className="display text-4xl">
+                  {subscription.data.paymentStatus === "approved" ? "Pagamento confirmado" : "Seu Pix está pronto"}
+                </p>
+                <p className="text-cream/70">
+                  Plano {subscription.data.plan} · {brl(subscription.data.amountCents)}.{" "}
+                  {subscription.data.paymentStatus === "approved"
+                    ? "Sua assinatura está ativa."
+                    : `Pague até ${new Date(String(subscription.data.expiresAt)).toLocaleString("pt-BR")}.`}
+                </p>
+                {subscription.data.paymentStatus !== "approved" && (
+                  <>
+                    <img
+                      src={`data:image/png;base64,${subscription.data.pixQrCodeBase64}`}
+                      alt="QR Code Pix da assinatura"
+                      className="size-52 bg-white p-2"
+                    />
+                    <label className="w-full">
+                      <span className="label text-cream/60">Pix copia e cola</span>
+                      <textarea
+                        readOnly
+                        value={subscription.data.pixCode}
+                        rows={4}
+                        className="mt-2 w-full resize-y border border-cream/20 bg-ink p-3 text-xs text-cream"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(subscription.data!.pixCode);
+                        setCopied(true);
+                      }}
+                      className="label border border-cream px-6 py-3 hover:bg-cream hover:text-ink"
+                    >
+                      {copied ? "Código copiado" : "Copiar código Pix"}
+                    </button>
+                  </>
+                )}
+                <p className="text-sm text-cream/60">
+                  {subscription.data.paymentStatus === "approved"
+                    ? "A confirmação do pagamento foi recebida."
+                    : subscription.data.emailSent
+                    ? `Também enviamos o código para ${form.email}.`
+                    : `O e-mail não foi confirmado. Copie o código acima e fale com a gente se precisar recebê-lo novamente.`}
+                </p>
+              </div>
+            )
+            : kind === "atacado" && lead.isSuccess
             ? (
               <div className="flex flex-col items-start justify-center border border-ink-line p-10">
                 <p className="display text-5xl">Recebido</p>
@@ -231,31 +350,126 @@ export default function Clube() {
                   value={form.email}
                   onChange={set("email")}
                 />
-                <Field label="WhatsApp" value={form.phone} onChange={set("phone")} />
-                {kind === "atacado" && (
-                  <Field
-                    label="Empresa / CNPJ"
-                    value={form.company}
-                    onChange={set("company")}
-                  />
+                {kind === "clube" && (
+                  <label className="flex items-start gap-3 text-sm text-cream/65">
+                    <input
+                      type="checkbox"
+                      checked={newsletterOptIn}
+                      onChange={(e) => setNewsletterOptIn(e.target.checked)}
+                      className="mt-1 accent-jungle"
+                    />
+                    <span>
+                      Quero receber novidades, ofertas e notificações da Kalango por e-mail. Posso cancelar a inscrição quando quiser.
+                    </span>
+                  </label>
                 )}
-                <Field
-                  label={kind === "clube" ? "Moagem preferida (opcional)" : "Volume estimado por mês"}
-                  value={form.message}
-                  onChange={set("message")}
-                />
-                {lead.isError && (
+                <Field label="WhatsApp" required={kind === "clube"} value={form.phone} onChange={set("phone", maskPhone)} />
+                {kind === "clube" ? (
+                  <>
+                    <fieldset className="space-y-3">
+                      <legend className="label text-cream/60">Forma de pagamento mensal</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {(["pix", "card"] as const).map((method) => (
+                          <button
+                            key={method}
+                            type="button"
+                            aria-pressed={paymentMethod === method}
+                            onClick={() => {
+                              setPaymentMethod(method);
+                              setAuthorizeCard(false);
+                              subscription.reset();
+                            }}
+                            className={cn(
+                              "label border px-5 py-3 transition-colors",
+                              paymentMethod === method
+                                ? "border-jungle bg-jungle text-cream"
+                                : "border-cream/25 text-cream/70 hover:border-cream"
+                            )}
+                          >
+                            {method === "pix" ? "Pix mensal" : "Cartão mensal"}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <Field
+                      label="CPF do pagador"
+                      required
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={form.document}
+                      onChange={set("document", maskCpf)}
+                    />
+                    <div className="grid gap-7 md:grid-cols-2">
+                      <Field
+                        label="CEP de entrega"
+                        required
+                        inputMode="numeric"
+                        autoComplete="postal-code"
+                        value={form.zip}
+                        onChange={set("zip", maskCep)}
+                      />
+                      <Field label="Estado (UF)" required maxLength={2} value={form.state} onChange={set("state")} />
+                      <Field label="Rua / avenida" required autoComplete="street-address" value={form.street} onChange={set("street")} />
+                      <Field label="Número" required value={form.number} onChange={set("number")} />
+                      <Field label="Complemento" value={form.complement} onChange={set("complement")} />
+                      <Field label="Bairro" required value={form.district} onChange={set("district")} />
+                      <Field label="Cidade" required value={form.city} onChange={set("city")} />
+                    </div>
+                    {paymentMethod === "pix" ? (
+                      <p className="text-sm text-cream/55">
+                        Você recebe o Pix da primeira mensalidade por e-mail. As próximas mensalidades Pix precisam de um novo pagamento.
+                      </p>
+                    ) : (
+                      <label className="flex items-start gap-3 text-sm text-cream/65">
+                        <input
+                          type="checkbox"
+                          required
+                          checked={authorizeCard}
+                          onChange={(e) => setAuthorizeCard(e.target.checked)}
+                          className="mt-1 accent-jungle"
+                        />
+                        <span>
+                          Autorizo o Mercado Pago a cobrar {brl(PLANOS.find((p) => p.id === plano)!.cents)} por mês no cartão que vou cadastrar. O cartão é cadastrado no ambiente seguro do Mercado Pago, não neste site.
+                        </span>
+                      </label>
+                    )}
+                    {paymentOff && (
+                      <p className="text-sm text-gold">
+                        Pagamento indisponível agora. Tente novamente mais tarde ou fale com a gente pelo WhatsApp.
+                      </p>
+                    )}
+                    {returnedFromCard && (
+                      <p role="status" className="border border-jungle/40 p-4 text-sm text-cream/70">
+                        Voltou do Mercado Pago? Estamos aguardando a confirmação da assinatura. Enviaremos uma atualização por e-mail.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Field label="Empresa / CNPJ" value={form.company} onChange={set("company")} />
+                    <Field label="Volume estimado por mês" value={form.message} onChange={set("message")} />
+                  </>
+                )}
+                {(lead.isError || subscription.isError || submitError) && (
                   <p className="text-sm text-jungle-lit">
-                    Não conseguimos enviar agora. Tente novamente.
+                    {submitError ?? (subscription.error instanceof Error
+                      ? subscription.error.message
+                      : lead.error instanceof Error
+                      ? lead.error.message
+                      : "Não conseguimos enviar agora. Tente novamente.")}
                   </p>
                 )}
                 <button
                   type="submit"
-                  disabled={lead.isPending}
+                  disabled={lead.isPending || subscription.isPending || (kind === "clube" && paymentOff)}
                   className="label flex items-center justify-center gap-3 bg-cream px-8 py-4 text-ink transition-colors hover:bg-jungle hover:text-cream disabled:opacity-60"
                 >
-                  {lead.isPending && <Spinner />}
-                  {kind === "clube" ? "Quero assinar" : "Falar com o comercial"}
+                  {(lead.isPending || subscription.isPending) && <Spinner />}
+                  {kind === "clube"
+                    ? paymentMethod === "pix"
+                      ? "Gerar Pix e assinar"
+                      : "Cadastrar cartão no Mercado Pago"
+                    : "Falar com o comercial"}
                 </button>
               </form>
             )}

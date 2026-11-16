@@ -4,13 +4,17 @@ import { and, asc, count, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../database";
 import * as s from "../database/schema";
 import { STORE } from "../config/store";
-import { escapeEmailHtml as esc, mailConfiguration, sendMailBatch, type MailMessage } from "./mail-transport";
+import { escapeEmailHtml as esc, mailConfiguration, sendMail, sendMailBatch, type MailMessage } from "./mail-transport";
 
-export async function subscribeNewsletter(name: string, email: string) {
+export async function subscribeNewsletter(
+  name: string,
+  email: string,
+  source = "newsletter",
+) {
   const normalized = email.trim().toLowerCase();
-  await db.insert(s.newsletterSubscribers).values({ email: normalized, name: name.trim(), unsubscribeToken: randomBytes(32).toString("hex") })
+  await db.insert(s.newsletterSubscribers).values({ email: normalized, name: name.trim(), source, unsubscribeToken: randomBytes(32).toString("hex") })
     .onConflictDoUpdate({ target: s.newsletterSubscribers.email,
-      set: { name: name.trim(), status: "subscribed", subscribedAt: new Date(), unsubscribedAt: null } });
+      set: { name: name.trim(), source, status: "subscribed", subscribedAt: new Date(), unsubscribedAt: null } });
 }
 
 export async function unsubscribeNewsletter(token: string) {
@@ -53,6 +57,28 @@ export function newsletterMessage(subject: string, message: string, unsubscribeT
     text: `${subject}\n\n${message}\n\nVocê se inscreveu na newsletter da Kalango.\nCancelar inscrição: ${cancel}\n${STORE.address.street}, ${STORE.address.city}/${STORE.address.state}`,
     headers: { "List-Unsubscribe": `<${oneClick}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
   };
+}
+
+export async function sendClubWelcomeEmail(input: {
+  reference: string;
+  customerName: string;
+  email: string;
+  planName: string;
+  amountCents: number;
+}) {
+  const subject = `Bem-vindo ao Clube Kalango — ${input.planName}`;
+  const amount = (input.amountCents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const html = `<html lang="pt-BR"><body style="margin:0;background:#0B0907;padding:32px 16px;"><div style="max-width:560px;margin:auto;background:#F3EEE4;color:#231F1B;padding:32px;font:16px/1.7 Arial,sans-serif;"><p style="font-size:11px;letter-spacing:.2em;color:#5F7A43;">KALANGO CAFÉS ESPECIAIS</p><h1 style="font:700 30px/1.15 Georgia,serif;">Bem-vindo ao Clube Kalango!</h1><p>Olá, ${esc(input.customerName)}. Seu primeiro pagamento foi confirmado e o plano <strong>${esc(input.planName)}</strong> está ativo.</p><p>Seu plano custa ${esc(amount)} por mês. Vamos preparar seu café e enviar para o endereço cadastrado.</p><p>Referência da assinatura: ${esc(input.reference)}.</p><hr style="border:0;border-top:1px solid #DDD4C6;"><p style="font-size:12px;color:#6B635A;">Esta é uma mensagem transacional sobre sua assinatura; ela não inscreve você na newsletter de novidades. Para falar com a Kalango, escreva para <a href="mailto:${esc(STORE.notificationEmail)}" style="color:#5F7A43;">${esc(STORE.notificationEmail)}</a>.<br>${esc(STORE.address.street)} · ${esc(STORE.address.district)}, ${esc(STORE.address.city)}/${esc(STORE.address.state)}</p></div></body></html>`;
+  const text = `Bem-vindo ao Clube Kalango!\n\nOlá, ${input.customerName}. Seu primeiro pagamento foi confirmado e o plano ${input.planName} está ativo.\n\nSeu plano custa ${amount} por mês. Vamos preparar seu café e enviar para o endereço cadastrado.\nReferência da assinatura: ${input.reference}.\n\nEsta mensagem transacional não inscreve você na newsletter de novidades.`;
+  return sendMail({
+    to: input.email,
+    subject,
+    html,
+    text,
+  }, `club-welcome/${input.reference}`);
 }
 
 /** Congela a audiência somente ao confirmar envio, nunca ao salvar rascunho. */

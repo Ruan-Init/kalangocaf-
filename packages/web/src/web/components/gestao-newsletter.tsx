@@ -39,10 +39,12 @@ export function NewsletterPainel({ token }: { token: string }) {
   const [draft, setDraft] = useState<{ id?: number; creationKey: string; subject: string; message: string } | null>(null);
   const [preview, setPreview] = useState(false);
   const [confirm, setConfirm] = useState<Campaign | null>(null);
+  const [confirmAudience, setConfirmAudience] = useState<number | null>(null);
   const [remove, setRemove] = useState<{ id: number; email: string } | null>(null);
   const [openHistory, setOpenHistory] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [savingAndConfirming, setSavingAndConfirming] = useState(false);
   const [progress, setProgress] = useState<Counts | null>(null);
   const running = useRef(false);
   const stop = useRef(false);
@@ -67,12 +69,44 @@ export function NewsletterPainel({ token }: { token: string }) {
     } catch (e) { setNotice(e instanceof Error ? e.message : "Não foi possível salvar o rascunho."); }
   }
 
-  async function runCampaign(c: Campaign, retry = false) {
+  async function saveAndConfirm() {
+    if (!draft) return;
+    setNotice(null);
+    setSavingAndConfirming(true);
+    try {
+      const row = await save.mutateAsync({ token, ...draft });
+      setDraft({ id: row.id, creationKey: row.creationKey, subject: row.subject, message: row.message });
+      const [campaignResult, summaryResult] = await Promise.all([
+        campaigns.refetch(),
+        summary.refetch(),
+      ]);
+      const campaign = campaignResult.data?.find((item) => item.id === row.id);
+      if (!campaign) throw new Error("Rascunho salvo, mas não foi possível abrir a confirmação. Atualize a lista de campanhas.");
+      const active = summaryResult.data?.active ?? 0;
+      if (!summaryResult.data?.configuration.ready || active === 0) {
+        setNotice("Rascunho salvo. Configure o serviço de e-mail e tenha inscritos ativos para enviar.");
+        return;
+      }
+      setConfirm(campaign);
+      setConfirmAudience(active);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Não foi possível salvar e preparar o envio.");
+    } finally {
+      setSavingAndConfirming(false);
+    }
+  }
+
+  function requestConfirmation(campaign: Campaign) {
+    setConfirm(campaign);
+    setConfirmAudience(summary.data?.active ?? 0);
+  }
+
+  async function runCampaign(c: Campaign, retry = false, expectedCount?: number) {
     if (running.current) return;
-    running.current = true; stop.current = false; setSending(true); setNotice(null); setConfirm(null); setProgress(null);
+    running.current = true; stop.current = false; setSending(true); setNotice(null); setConfirm(null); setConfirmAudience(null); setProgress(null);
     try {
       if (c.status === "draft") {
-        await prepare.mutateAsync({ token, id: c.id, expectedCount: summary.data?.active ?? 0, expectedSubject: c.subject, expectedMessage: c.message });
+        await prepare.mutateAsync({ token, id: c.id, expectedCount: expectedCount ?? summary.data?.active ?? 0, expectedSubject: c.subject, expectedMessage: c.message });
       } else {
         await recover.mutateAsync({ token, id: c.id });
         if (retry) await retryFailed.mutateAsync({ token, id: c.id });
@@ -116,9 +150,9 @@ export function NewsletterPainel({ token }: { token: string }) {
     {draft && <div className="border border-cream/20 p-5 md:p-7"><div className="flex items-center justify-between"><h3 className="display text-2xl">{draft.id ? "Editar rascunho" : "Nova campanha"}</h3><button aria-label="Fechar editor" disabled={sending || save.isPending} onClick={() => setDraft(null)}><X className="size-5" /></button></div>
       <div className="mt-6 grid gap-5"><label className="block"><span className="label mb-2 block text-cream/50">Assunto do e-mail</span><input aria-label="Assunto do e-mail" maxLength={150} className={field} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} disabled={save.isPending || sending} placeholder="Um novo microlote acabou de sair da torrefação" /></label>
       <label className="block"><span className="label mb-2 block text-cream/50">Mensagem</span><textarea aria-label="Mensagem da newsletter" rows={9} maxLength={12000} className={field} value={draft.message} onChange={(e) => setDraft({ ...draft, message: e.target.value })} disabled={save.isPending || sending} placeholder="Conte a novidade. Escreva em texto; a identidade Kalango e o link de cancelamento entram automaticamente." /></label></div>
-      <div className="mt-5 flex flex-wrap gap-3"><button className={button} onClick={() => setPreview((p) => !p)}><Eye className="size-4" />{preview ? "Ocultar prévia" : "Ver prévia"}</button><button className={button} disabled={save.isPending || sending || draft.subject.trim().length < 3 || draft.message.trim().length < 10} onClick={saveDraft}>{save.isPending ? <Spinner /> : <CheckIcon />}Salvar rascunho</button></div>
+      <div className="mt-5 flex flex-wrap gap-3"><button className={button} onClick={() => setPreview((p) => !p)}><Eye className="size-4" />{preview ? "Ocultar prévia" : "Ver prévia"}</button><button className={button} disabled={save.isPending || savingAndConfirming || sending || draft.subject.trim().length < 3 || draft.message.trim().length < 10} onClick={saveDraft}>{save.isPending ? <Spinner /> : <CheckIcon />}Salvar rascunho</button><button className={button} disabled={save.isPending || savingAndConfirming || sending || draft.subject.trim().length < 3 || draft.message.trim().length < 10 || !summary.data?.configuration.ready || !summary.data.active} onClick={() => void saveAndConfirm()}>{savingAndConfirming ? <Spinner /> : <Send className="size-4" />}Salvar e enviar</button></div>
       {preview && <div className="mt-6 max-w-xl bg-cream p-7 text-ink"><p className="label text-jungle">Kalango Cafés Especiais</p><h4 className="mt-6 break-words font-serif text-3xl">{draft.subject || "Assunto do e-mail"}</h4><p className="mt-6 whitespace-pre-wrap break-words text-sm leading-7">{draft.message || "Sua mensagem aparece aqui."}</p><p className="mt-7 border-t border-ink/15 pt-4 text-xs text-muted">Você recebe esta mensagem porque se inscreveu na newsletter da Kalango.<br /><span className="underline">Cancelar inscrição</span> · Fale com a Kalango</p></div>}
-      <p className="mt-5 text-xs text-cream/45">Salve primeiro. O botão “Enviar campanha” aparece no rascunho abaixo; você confere o total antes de disparar.</p>
+      <p className="mt-5 text-xs text-cream/45">“Salvar e enviar” abre a confirmação com o total de inscritos; nenhum e-mail é enviado antes de você confirmar.</p>
     </div>}
 
     <div className="flex gap-4 border-b border-cream/15">{(["campanhas", "inscritos"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={cn("label border-b-2 pb-3", tab === t ? "border-jungle text-cream" : "border-transparent text-cream/45")}>{t === "campanhas" ? "Campanhas & histórico" : "Inscritos"}</button>)}</div>
@@ -129,7 +163,7 @@ export function NewsletterPainel({ token }: { token: string }) {
         {c.status !== "draft" && <p className="mt-4 text-xs leading-6 text-cream/60">{c.counts.accepted} aceitos · {c.counts.queued} pendentes · {c.counts.failed} recusados · {c.counts.uncertain} incertos · {c.counts.skipped} não enviados</p>}
         {c.counts.uncertain > 0 && <p className="mt-3 text-xs text-gold">Envios incertos não são repetidos. Confira esses destinatários no painel Resend antes de qualquer novo envio.</p>}
         <div className="mt-5 flex flex-wrap gap-3">
-          {c.status === "draft" && <><button className={button} disabled={sending} onClick={() => { setDraft({ id: c.id, creationKey: c.creationKey, subject: c.subject, message: c.message }); setPreview(false); }}>Editar rascunho</button><button className={button} disabled={sending || !summary.data?.configuration.ready || !summary.data?.active} onClick={() => setConfirm(c)}><Send className="size-3.5" />Enviar campanha</button></>}
+          {c.status === "draft" && <><button className={button} disabled={sending} onClick={() => { setDraft({ id: c.id, creationKey: c.creationKey, subject: c.subject, message: c.message }); setPreview(false); }}>Editar rascunho</button><button className={button} disabled={sending || !summary.data?.configuration.ready || !summary.data?.active} onClick={() => requestConfirmation(c)}><Send className="size-3.5" />Enviar campanha</button></>}
           {c.status === "active" && <button className={button} disabled={sending || !summary.data?.configuration.ready} onClick={() => setConfirm(c)}>Retomar restantes</button>}
           {c.counts.failed > 0 && <button className={button} disabled={sending || !summary.data?.configuration.ready} onClick={() => { if (window.confirm(`Tentar novamente somente ${c.counts.failed} mensagem(ns) explicitamente recusada(s)? Aceitos e incertos não serão reenviados.`)) void runCampaign(c, true); }}>Tentar recusados novamente</button>}
           {c.status !== "draft" && <button className={button} onClick={() => setOpenHistory((id) => id === c.id ? null : c.id)}>{openHistory === c.id ? "Fechar destinatários" : "Ver destinatários"}</button>}
@@ -137,7 +171,7 @@ export function NewsletterPainel({ token }: { token: string }) {
       </article>)}
     </div>}
 
-    {confirm && <div role="dialog" aria-label="Confirmar envio da campanha" className="border border-gold/50 bg-gold/5 p-6"><h3 className="display text-2xl">Confirmar envio</h3><p className="mt-4 text-sm">Assunto: <strong>{confirm.subject}</strong></p><p className="mt-2 text-sm">{confirm.status === "draft" ? `${summary.data?.active ?? 0} inscrito(s) ativo(s) vão receber este e-mail.` : `${confirm.counts.queued} destinatário(s) ainda pendente(s). Aceitos e incertos não serão repetidos.`}</p><p className="mt-3 text-xs text-cream/55">O envio real não pode ser desfeito. Cancelamentos de inscrição são respeitados.</p><div className="mt-5 flex flex-wrap gap-3"><button className={button} onClick={() => setConfirm(null)}>Cancelar</button><button className={button} disabled={sending} onClick={() => void runCampaign(confirm)}><Send className="size-4" />Confirmar e enviar</button></div></div>}
+    {confirm && <div role="dialog" aria-label="Confirmar envio da campanha" className="border border-gold/50 bg-gold/5 p-6"><h3 className="display text-2xl">Confirmar envio</h3><p className="mt-4 text-sm">Assunto: <strong>{confirm.subject}</strong></p><p className="mt-2 text-sm">{confirm.status === "draft" ? `${confirmAudience ?? summary.data?.active ?? 0} inscrito(s) ativo(s) vão receber este e-mail.` : `${confirm.counts.queued} destinatário(s) ainda pendente(s). Aceitos e incertos não serão repetidos.`}</p><p className="mt-3 text-xs text-cream/55">O envio real não pode ser desfeito. Cancelamentos de inscrição são respeitados.</p><div className="mt-5 flex flex-wrap gap-3"><button className={button} onClick={() => { setConfirm(null); setConfirmAudience(null); }}>Cancelar</button><button className={button} disabled={sending} onClick={() => void runCampaign(confirm, false, confirmAudience ?? undefined)}><Send className="size-4" />Confirmar e enviar</button></div></div>}
 
     {tab === "inscritos" && <div>
       <div className="flex flex-wrap gap-3"><input aria-label="Buscar inscritos" placeholder="Buscar nome ou e-mail" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className={cn(field, "min-w-0 flex-1")} /><select aria-label="Filtrar inscrições" className={cn(field, "w-auto bg-ink")} value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setPage(1); }}><option value="all">Todos</option><option value="subscribed">Inscritos ativos</option><option value="unsubscribed">Cancelados</option></select><button className={button} disabled={exporter.isPending} onClick={exportCsv}>{exporter.isPending ? <Spinner /> : <Download className="size-4" />}Exportar CSV</button></div>

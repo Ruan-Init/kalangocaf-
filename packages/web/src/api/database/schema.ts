@@ -158,6 +158,52 @@ export const orders = sqliteTable("orders", {
   blingAttemptAt: integer("bling_attempt_at", { mode: "timestamp" }),
 });
 
+export const clubSubscriptions = sqliteTable("club_subscriptions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  reference: text("reference").notNull().unique(),
+  idempotencyHash: text("idempotency_hash").notNull().unique(),
+  requestFingerprint: text("request_fingerprint").notNull(),
+  plan: text("plan").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  paymentMethod: text("payment_method").notNull().default("pix"),
+  status: text("status").notNull().default("pending_payment"),
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  paymentStatusDetail: text("payment_status_detail"),
+  mpPaymentId: text("mp_payment_id").unique(),
+  mpPreapprovalId: text("mp_preapproval_id").unique(),
+  mpPreapprovalUrl: text("mp_preapproval_url"),
+  preapprovalStatus: text("preapproval_status"),
+  pixCode: text("pix_code"),
+  pixQrCodeBase64: text("pix_qr_code_base64"),
+  pixExpiresAt: integer("pix_expires_at", { mode: "timestamp" }),
+  customerName: text("customer_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  zip: text("zip").notNull(),
+  street: text("street").notNull(),
+  number: text("number").notNull(),
+  complement: text("complement"),
+  district: text("district").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  isTest: integer("is_test", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  paidAt: integer("paid_at", { mode: "timestamp" }),
+});
+
+export const clubSubscriptionPayments = sqliteTable("club_subscription_payments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  subscriptionId: integer("subscription_id")
+    .notNull()
+    .references(() => clubSubscriptions.id, { onDelete: "cascade" }),
+  paymentId: text("payment_id").notNull().unique(),
+  status: text("status").notNull(),
+  statusDetail: text("status_detail"),
+  amountCents: integer("amount_cents").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  paidAt: integer("paid_at", { mode: "timestamp" }),
+});
+
 /**
  * Conexão com o Bling (linha única, id = 1). Tokens ficam cifrados com uma
  * chave derivada do BLING_CLIENT_SECRET — nunca no .env, porque giram sozinhos.
@@ -347,4 +393,5 @@ export type Merch = typeof merch.$inferSelect;
 export type Recipe = typeof recipes.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type ClubSubscription = typeof clubSubscriptions.$inferSelect;
 export type BlingConnection = typeof blingConnection.$inferSelect;

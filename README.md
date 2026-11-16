@@ -35,9 +35,13 @@ O GitHub guarda o código, não as credenciais. Para publicar, configure as vari
 
 Configure `MERCADOPAGO_ENV`, `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_PUBLIC_KEY` e `MERCADOPAGO_SELLER_ID` da mesma conta e ambiente. Seller ID é o ID da conta do Mercado Pago, não do Mercado Livre.
 
-Use credenciais de teste para testar sem cobranças reais. Em produção, publique a API em domínio HTTPS e configure o webhook `https://SEU-DOMINIO/api/webhooks/mercadopago`. Sem webhook público, a confirmação do pagamento não chega ao site. Produção pode movimentar dinheiro.
+Use credenciais de teste para testar sem cobranças reais. Em produção, publique a API em domínio HTTPS e configure o webhook `https://SEU-DOMINIO/api/webhooks/mercadopago` para notificações de pagamentos e assinaturas. Sem webhook público, a confirmação do pagamento não chega ao site. Produção pode movimentar dinheiro.
 
 E-mails precisam de `RESEND_API_KEY`, `EMAIL_FROM` e domínio verificado no Resend. Bling, Melhor Envio e armazenamento de imagens também exigem credenciais próprias.
+
+No Clube, a pessoa escolhe Pix mensal (código da primeira cobrança por e-mail; as próximas mensalidades Pix precisam ser emitidas separadamente) ou cartão mensal. No cartão, o Mercado Pago hospeda o cadastro e a autorização; o site não recebe os dados do cartão, e as cobranças recorrentes começam após a autorização e confirmação do primeiro pagamento. Após o primeiro pagamento confirmado, a newsletter envia uma mensagem transacional de boas-vindas. O formulário permite optar separadamente por receber campanhas e notificações de marketing; a adesão ao Clube, sozinha, não inscreve a pessoa na lista.
+
+Em banco existente, antes de publicar o novo fluxo do Clube, configure o `.env` com o banco do ambiente desejado e rode `bun run db:migrate:club`. Essa migração cria as tabelas aditivas `club_subscriptions` e `club_subscription_payments`; não execute `db:push` em produção.
 
 ## Publicar
 
