@@ -39,6 +39,7 @@ Se a porta estiver ocupada, pare o outro servidor com Ctrl+C ou use `bun run kil
 O pacote privado entregue contém **.env com as configurações de produção necessárias para o site**, inclusive banco, Gestão, Mercado Pago, Resend, Bling, segredo de acesso aos pedidos e storage. Não compartilhe esse ZIP publicamente.
 
 - `.env` é ignorado pelo Git. Confira `git check-ignore .env` antes de fazer o primeiro commit.
+- Para preencher localmente as 10 chaves de integração e gerar `.env.gpg`, instale o GPG e execute no PowerShell: `.\tooling\collect-integration-secrets.ps1`. Os valores são digitados sem aparecer no terminal; o GPG pedirá uma senha para criptografar. O script preserva as demais configurações do `.env` ou, se ele ainda não existir, começa pelo `.env.template`. O `.env` em texto claro permanece local para uso da aplicação, e os dois arquivos são ignorados pelo Git. Não envie as chaves por chat nem publique esses arquivos.
 - Envie o **código** ao GitHub, não o ZIP privado e não o `.env`.
 - No servidor Hostinger, coloque o `.env` na raiz do projeto separadamente, pelo painel seguro/SSH. Ele não vem em `git clone`.
 - Em Linux: `chmod 600 .env`.
