@@ -43,9 +43,23 @@ No Clube, a pessoa escolhe Pix mensal (código da primeira cobrança por e-mail;
 
 Em banco existente, antes de publicar o novo fluxo do Clube, configure o `.env` com o banco do ambiente desejado e rode `bun run db:migrate:club`. Essa migração cria as tabelas aditivas `club_subscriptions` e `club_subscription_payments`; não execute `db:push` em produção.
 
-## Publicar
+## Publicar na Hostinger Web Apps (Node.js)
 
-Use hospedagem que mantenha Bun e a API rodando; hospedagem de arquivos estáticos não basta. Configure o `.env` de produção no servidor, domínio HTTPS e proxy para `/api/*`. Depois rode:
+Hospedagem estática não basta: a API também precisa ficar rodando. Configure a aplicação para usar Node.js 22.12 ou mais recente, com a raiz do repositório, e use estes comandos:
+
+```sh
+npm install --prefix packages/web --workspaces=false
+npm run build --prefix packages/web
+npm run start --prefix packages/web
+```
+
+Configure as variáveis de ambiente no painel da hospedagem. Para um subdomínio de teste, use-o em `WEBSITE_URL` e `SITE_URL`, configure um banco de teste separado e use credenciais de sandbox para pagamentos. Não reutilize o `.env` de produção. Confira `https://SEU-DOMINIO/api/health`.
+
+Para habilitar fotos da Gestão, crie um bucket privado e uma chave Tigris com permissões de leitura e gravação de objetos. Configure `S3_ENDPOINT=https://t3.storage.dev`, `S3_BUCKET`, `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` no ambiente do servidor Node. O projeto usa o SDK S3 da AWS, compatível com Tigris, sem exigir outro pacote. As imagens são servidas pelo endpoint `/api/photos/...`, portanto não é necessário tornar o bucket público. Defina também `VITE_SITE_URL` para o subdomínio durante o build do frontend.
+
+## Publicar em VPS com Bun
+
+Também é possível usar hospedagem que mantenha Bun e a API rodando. Configure o `.env` de produção no servidor, domínio HTTPS e proxy para `/api/*`. Depois rode:
 
 ```powershell
 bun install --frozen-lockfile
@@ -53,4 +67,4 @@ bun run build
 bun run serve
 ```
 
-Confira `https://SEU-DOMINIO/api/health`. Push para o GitHub, sozinho, não publica a aplicação. Nunca faça commit de `.env` ou `.env.gpg`.
+Push para o GitHub, sozinho, não publica a aplicação. Nunca faça commit de `.env` ou `.env.gpg`.

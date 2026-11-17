@@ -1,6 +1,8 @@
 import type { RouterClient } from "@orpc/server";
 import { createApp } from "./__core/app";
-import { admin } from "./routes/admin";
+import { admin, assertOps } from "./routes/admin";
+import { handlePhotoUpload } from "./routes/photo-upload";
+import { handlePhotoRead } from "./routes/photo-read";
 import { bling } from "./routes/bling";
 import { catalog } from "./routes/catalog";
 import { club } from "./routes/club";
@@ -13,6 +15,8 @@ import { googleMerchantXml, llmsTxt, robotsTxt, sitemapXml } from "./seo/feeds";
 import { blingCallback, blingWebhook } from "./services/bling-webhook";
 import { mercadoPagoWebhook } from "./services/mercadopago-webhook";
 import { newsletterOneClick } from "./services/newsletter-unsubscribe";
+import { missingPhotoStorageConfig } from "./lib/s3";
+import { readPhoto, storePhoto } from "./services/photo-storage";
 
 export const router = {
   ping,
@@ -31,6 +35,21 @@ export type AppRouter = typeof router;
 export type AppRouterClient = RouterClient<AppRouter>;
 
 const app = createApp(router);
+
+app.post("/api/admin/upload-photo", (c) =>
+  handlePhotoUpload(c.req.raw, {
+    assertOps,
+    missingConfig: missingPhotoStorageConfig,
+    storePhoto,
+  })
+);
+
+app.get("/api/photos/:folder/:filename", (c) =>
+  handlePhotoRead(`${c.req.param("folder")}/${c.req.param("filename")}`, {
+    missingConfig: missingPhotoStorageConfig,
+    readPhoto,
+  })
+);
 
 // Feeds de SEO / busca por IA. Servidos sob /api porque o dev plugin e o
 // __server.ts só encaminham /api para o Hono. As versões em public/ (geradas por

@@ -16,7 +16,8 @@ import { emailReady, sendShippingNotice } from "../services/email";
 import { retryOrderEmails } from "../services/order-email";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { publicUrl, s3 } from "../lib/s3";
+import { missingPhotoStorageConfig, publicUrl, s3 } from "../lib/s3";
+import { photoObjectKey } from "../services/photo-storage";
 import { assertPublicationEditable, creationSku, publicationOpen, publicationRow, publishToBling } from "../services/bling-publish";
 
 export const ORDER_STATUS = [
@@ -481,28 +482,21 @@ export const admin = {
     )
     .handler(async ({ input }) => {
       assertOps(input.token);
-      if (!process.env.S3_BUCKET) {
-        throw new ORPCError("FORBIDDEN", { message: "Storage de fotos não configurado no servidor." });
+      const missing = missingPhotoStorageConfig();
+      if (missing.length) {
+        throw new ORPCError("FORBIDDEN", {
+          message: `Storage de fotos não configurado: ${missing.join(", ")}.`,
+        });
       }
-      const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" }[input.contentType];
-      const base = input.filename
-        .replace(/\.[a-z0-9]+$/i, "")
-        .normalize("NFD")
-        .replace(/[̀-ͯ]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 60) || "foto";
-      const key = `${input.folder}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${base}.${ext}`;
+      const key = photoObjectKey(input.filename, input.contentType, input.folder);
       const url = await getSignedUrl(
         s3,
         new PutObjectCommand({
           Bucket: process.env.S3_BUCKET,
           Key: key,
           ContentType: input.contentType,
-          ACL: "public-read",
         }),
-        { expiresIn: 600, signableHeaders: new Set(["x-amz-acl"]) }
+        { expiresIn: 600 }
       );
       return { url, key, publicUrl: publicUrl(key) };
     }),

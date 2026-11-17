@@ -2,12 +2,11 @@
 /* eslint-disable jsx-a11y/prefer-tag-over-role */
 /**
  * Caixa de fotos do painel: arrastar e soltar (ou clicar) para enviar.
- * Cada foto é reduzida no navegador (lado maior até MAX_SIDE, WebP/JPEG) e vai
- * direto pro storage com link assinado. Devolve a lista de URLs públicas.
+ * Cada foto é reduzida no navegador (lado maior até MAX_SIDE, WebP/JPEG) e
+ * enviada ao storage pelo servidor. Devolve a lista de URLs públicas.
  */
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ImagePlus, Trash2 } from "lucide-react";
-import { client } from "../lib/api";
 import { cn } from "../lib/utils";
 import { Spinner } from "./primitives";
 
@@ -86,20 +85,40 @@ export function ImageDrop({
         const preview = URL.createObjectURL(file);
         setPending((p) => [...p, { id, name: file.name, preview }]);
         try {
-          const { blob, type, name } = await prepare(file);
-          const { url, publicUrl } = await client.admin.uploadPresign({
-            token,
-            filename: name,
-            contentType: type,
-            size: blob.size,
-            folder,
+          const { blob, name } = await prepare(file);
+          const form = new FormData();
+          form.append("file", blob, name);
+          form.append("folder", folder);
+          const res = await fetch("/api/admin/upload-photo", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
           });
-          const res = await fetch(url, {
-            method: "PUT",
-            body: blob,
-            headers: { "Content-Type": type, "x-amz-acl": "public-read" },
-          });
-          if (!res.ok) throw new Error(`Falha no envio (${res.status})`);
+          let result: unknown;
+          try {
+            result = await res.json();
+          } catch {
+            throw new Error(`Resposta inválida do servidor (${res.status}).`);
+          }
+          if (!res.ok) {
+            const message =
+              typeof result === "object" &&
+              result !== null &&
+              "error" in result &&
+              typeof result.error === "string"
+                ? result.error
+                : `Falha no envio (${res.status}).`;
+            throw new Error(message);
+          }
+          if (
+            typeof result !== "object" ||
+            result === null ||
+            !("publicUrl" in result) ||
+            typeof result.publicUrl !== "string"
+          ) {
+            throw new Error("Resposta inválida do servidor.");
+          }
+          const publicUrl = result.publicUrl;
           latest.current = [...latest.current, publicUrl];
           onChange(latest.current);
           setPending((p) => p.filter((x) => x.id !== id));
